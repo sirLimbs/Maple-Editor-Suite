@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MapleCodexCreator/MapleCodexCreator.csproj" />
+  <Project Path="MapleEditor.UI/MapleEditor.UI.csproj" />
+  <Project Path="MapleImgEditor/MapleImgEditor.csproj" />
+  <Project Path="MapleLib/MapleLib.csproj" />
+  <Project Path="MapleMobEditor/MapleMobEditor.csproj" />
+</Solution>

@@ -1,0 +1,21 @@
+using Spine;
+
+namespace MapleLib.WzLib.Spine;
+
+public class WzSpineObject
+{
+	public readonly WzSpineAnimationItem spineAnimationItem;
+
+	public Skeleton skeleton;
+
+	public AnimationStateData stateData;
+
+	public AnimationState state;
+
+	public SkeletonBounds bounds = new SkeletonBounds();
+
+	public WzSpineObject(WzSpineAnimationItem spineAnimationItem)
+	{
+		this.spineAnimationItem = spineAnimationItem;
+	}
+}

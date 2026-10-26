@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MapleImgEditor</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>True</UseWindowsForms>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <ApplicationIcon>..\MapleEditor.UI\Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MapleLib\MapleLib.csproj" />
+    <ProjectReference Include="..\MapleEditor.UI\MapleEditor.UI.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="MapleImgEditor\Assets\iconRewardTemplate.png">
+      <LogicalName>MapleImgEditor.Assets.iconRewardTemplate.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>
+

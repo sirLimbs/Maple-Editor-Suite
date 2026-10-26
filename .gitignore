@@ -1,0 +1,47 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+artifacts/
+Build/
+
+# Local packaged builds and old binaries
+app/
+backup/
+
+# User / IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs, temporary WZ files and backups
+*.log
+*.bak
+*.TEMP
+*.temp
+*.new
+*.tmp
+
+# Settings (kept per-user in %APPDATA%, never in the repository)
+settings.json
+*.settings.json
+
+# NuGet output
+packages/
+*.nupkg
+
+# Symbols
+*.pdb
+
+# OS metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

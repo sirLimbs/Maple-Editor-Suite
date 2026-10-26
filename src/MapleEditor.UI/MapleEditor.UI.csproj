@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MapleEditor.UI</AssemblyName>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <UseWindowsForms>True</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <GenerateAssemblyInfo>True</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app.ico" />
+    <EmbeddedResource Include="Assets\header-banner.png" />
+    <EmbeddedResource Include="Assets\logo.png" />
+  </ItemGroup>
+</Project>

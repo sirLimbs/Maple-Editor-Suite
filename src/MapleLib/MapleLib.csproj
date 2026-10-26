@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MapleLib</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <UseWPF>True</UseWPF>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json"><HintPath>..\lib\Newtonsoft.Json.dll</HintPath></Reference>
+    <Reference Include="MonoGame.Framework"><HintPath>..\lib\MonoGame.Framework.dll</HintPath></Reference>
+    <Reference Include="NAudio.Core"><HintPath>..\lib\NAudio.Core.dll</HintPath></Reference>
+    <Reference Include="NAudio"><HintPath>..\lib\NAudio.dll</HintPath></Reference>
+    <Reference Include="spine-csharp"><HintPath>..\lib\spine-csharp.dll</HintPath></Reference>
+    <Reference Include="Newtonsoft.Json.Bson"><HintPath>..\lib\Newtonsoft.Json.Bson.dll</HintPath></Reference>
+    <Reference Include="LZ4"><HintPath>..\lib\LZ4.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

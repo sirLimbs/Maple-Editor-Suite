@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MapleMobEditor</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>True</UseWindowsForms>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <ApplicationIcon>..\MapleEditor.UI\Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MapleLib\MapleLib.csproj" />
+    <ProjectReference Include="..\MapleEditor.UI\MapleEditor.UI.csproj" />
+    <ProjectReference Include="..\MapleImgEditor\MapleImgEditor.csproj" />
+    <ProjectReference Include="..\MapleCodexCreator\MapleCodexCreator.csproj" />
+  </ItemGroup>
+</Project>
+
