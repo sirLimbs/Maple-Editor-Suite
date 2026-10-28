@@ -1842,10 +1842,16 @@ internal sealed class MainForm : Form
 
 	private void StopMobPreviewAnimation()
 	{
+		Bitmap? previous = _iconPreview.Image as Bitmap;
+		bool ownedByClip = _mobPreviewClip?.Frames.Contains(previous) == true;
 		_mobPreviewPlayback?.Dispose();
 		_mobPreviewPlayback = null;
 		_mobPreviewClip?.Dispose();
 		_mobPreviewClip = null;
+		if (previous != null && !ownedByClip)
+		{
+			previous.Dispose();
+		}
 		_iconPreview.Image = null;
 	}
 

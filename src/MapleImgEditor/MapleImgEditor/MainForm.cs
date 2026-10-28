@@ -3430,10 +3430,16 @@ public sealed class MainForm : Form
 
 	private void StopRewardPreviewAnimation()
 	{
+		Bitmap? previous = _iconRewardPreview.Image as Bitmap;
+		bool ownedByClip = _rewardPreviewClip?.Frames.Contains(previous) == true;
 		_rewardPreviewPlayback?.Dispose();
 		_rewardPreviewPlayback = null;
 		_rewardPreviewClip?.Dispose();
 		_rewardPreviewClip = null;
+		if (previous != null && !ownedByClip)
+		{
+			previous.Dispose();
+		}
 		_iconRewardPreview.Image = null;
 	}
 
