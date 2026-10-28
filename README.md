@@ -39,6 +39,17 @@ Both workflows are usable from the same build. The data-version selector changes
 
 ---
 
+## What's New
+
+- **String.wz-aware ID editing** — changing an item ID now moves the matching `String.wz` name entry and rewrites linked item IDs, `source` paths, UOLs, `_inlink` and `_outlink` values.
+- **Reference-safe new items** — newly created or duplicated items copy matching `String.wz` text and rewrite cloned references to the new ID.
+- **Linked canvas support** — `_inlink` and `_outlink` canvases resolve correctly in thumbnails, previews and exports; replacing an icon with a concrete image removes the link safely.
+- **Animation previews** — Item Reward Preview plays animated `iconReward` frames, and Mob Preview plays the primary `stand` animation automatically.
+- **Animation browser and export** — `View > Preview Animations...` lists every multi-frame node (including nested effects), plays it, and exports APNG or GIF with frame delays.
+- **Source-build packaging** — SharpDX runtime assemblies now ship with editor builds, so PNG decode and animation previews work from a clean source build.
+
+---
+
 ## Screenshots
 
 <p align="center">
@@ -318,6 +329,8 @@ Build output, local packaged builds, backups, logs, temporary WZ files and perso
 
 ---
 
+## Screenshots
+
 <p align="center">
-  <sub>Built for local WZ / IMG / XML editing. Always keep backups of your data before repacking archives.</sub>
+  <img src="docs/screenshots/launcher.png" alt="Maple Editor Suite launcher" width="100%">
 </p>
