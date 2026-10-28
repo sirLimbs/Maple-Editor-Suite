@@ -18,5 +18,14 @@
     <Reference Include="spine-csharp"><HintPath>..\lib\spine-csharp.dll</HintPath></Reference>
     <Reference Include="Newtonsoft.Json.Bson"><HintPath>..\lib\Newtonsoft.Json.Bson.dll</HintPath></Reference>
     <Reference Include="LZ4"><HintPath>..\lib\LZ4.dll</HintPath></Reference>
+    <Reference Include="SharpDX"><HintPath>..\lib\SharpDX.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.Direct2D1"><HintPath>..\lib\SharpDX.Direct2D1.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.Direct3D11"><HintPath>..\lib\SharpDX.Direct3D11.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.Direct3D9"><HintPath>..\lib\SharpDX.Direct3D9.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.DXGI"><HintPath>..\lib\SharpDX.DXGI.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.Mathematics"><HintPath>..\lib\SharpDX.Mathematics.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.MediaFoundation"><HintPath>..\lib\SharpDX.MediaFoundation.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.XAudio2"><HintPath>..\lib\SharpDX.XAudio2.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="SharpDX.XInput"><HintPath>..\lib\SharpDX.XInput.dll</HintPath><Private>true</Private></Reference>
   </ItemGroup>
 </Project>

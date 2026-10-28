@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -552,7 +552,24 @@ public sealed class MainForm : Form
 			v95.Checked = MapleEditorVersionSettings.Current == MapleEditorGameVersion.V95;
 		};
 		menuStrip.Items.Add(versionMenu);
+		ToolStripMenuItem viewMenu = new ToolStripMenuItem("View");
+		viewMenu.DropDownItems.Add("Preview Animations...", null, (object? _, EventArgs _) =>
+		{
+			PreviewSelectedAnimations();
+		});
+		menuStrip.Items.Add(viewMenu);
 		return menuStrip;
+	}
+
+	private void PreviewSelectedAnimations()
+	{
+		CodexCardEntry? card = SelectedCard();
+		if (card == null)
+		{
+			MessageBox.Show(this, "Select a codex card first.", "Animation preview", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			return;
+		}
+		AnimationViewerForm.ShowFor(this, card.CardProperty, "Animations - " + card.CardId);
 	}
 
 	private void SetVersion(MapleEditorGameVersion version)
@@ -717,7 +734,7 @@ public sealed class MainForm : Form
 			}
 			_saveAllButton.Enabled = _cards.Count > 0;
 			_consumeStringPathBox.Text = ((stringPath != null) ? (stringPath + "\\Consume.img") : string.Empty);
-			_header.RightText = Path.GetFileName(itemPath) + " · 0238";
+			_header.RightText = Path.GetFileName(itemPath) + " � 0238";
 			splash.Report("Ready.", 1.0);
 			SetStatus($"Loaded {_cards.Count} cards from {Path.GetFileName(itemPath)}\\Consume\\0238.img" + ((_stringArchive != null) ? " + String.wz" : " (String.wz not found)"));
 			loaded = true;
@@ -1137,7 +1154,11 @@ public sealed class MainForm : Form
 		{
 			return;
 		}
-		using Bitmap bitmap = canvas.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? bitmap = WzAnimationReader.GetCanvasBitmap(canvas);
+		if (bitmap == null)
+		{
+			return;
+		}
 		box.Image = (Bitmap)bitmap.Clone();
 	}
 
@@ -1391,8 +1412,18 @@ public sealed class MainForm : Form
 		WzCanvasProperty wzCanvasProperty2 = ResolveCanvas(templateInfo, name);
 		if (wzCanvasProperty2 != null)
 		{
-			using Bitmap bitmap = wzCanvasProperty2.PngProperty.GetImage(saveInMemory: false);
-			wzCanvasProperty.PngProperty.SetBitmapPreservingFormat(bitmap);
+			using Bitmap? bitmap = WzAnimationReader.GetCanvasBitmap(wzCanvasProperty2);
+			if (bitmap != null)
+			{
+				wzCanvasProperty.PngProperty.SetBitmapPreservingFormat(bitmap);
+			}
+			else
+			{
+				using Bitmap empty = new Bitmap(width, height);
+				using Graphics graphics2 = Graphics.FromImage(empty);
+				graphics2.Clear(Color.Transparent);
+				wzCanvasProperty.PngProperty.SetBitmapPreservingFormat(empty);
+			}
 		}
 		else
 		{
@@ -1449,6 +1480,8 @@ public sealed class MainForm : Form
 		{
 			WzPngProperty wzPngProperty = (canvas.PngProperty = new WzPngProperty());
 		}
+		canvas.RemoveProperty(WzCanvasProperty.InlinkPropertyName);
+		canvas.RemoveProperty(WzCanvasProperty.OutlinkPropertyName);
 		WzPngFormat? targetFormat = forcedFormat;
 		if (!targetFormat.HasValue && canvas.PngProperty.Width > 0 && canvas.PngProperty.Height > 0)
 		{
@@ -1532,7 +1565,7 @@ public sealed class MainForm : Form
 			string text = (saveFileDialog.FileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? saveFileDialog.FileName : (saveFileDialog.FileName.TrimEnd('.') + ".png"));
 			try
 			{
-				using Bitmap bitmap = wzCanvasProperty.PngProperty.GetImage(saveInMemory: false);
+				using Bitmap? bitmap = WzAnimationReader.GetCanvasBitmap(wzCanvasProperty) ?? throw new InvalidOperationException("The selected canvas has no readable image.");
 				bitmap.Save(text);
 				SetStatus("Exported iconRaw: " + text);
 			}

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using MapleEditor.UI;
 using MapleLib.Configuration;
@@ -43,6 +44,11 @@ public sealed class MainForm : Form
 
 	private static readonly Color SubtleTextColor = UiTheme.TextSubtle;
 
+	private static readonly HashSet<string> IdReferenceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"item", "itemid", "itemid2", "linkeditem", "link", "target", "targetid", "reward", "rewardid", "replace", "consume", "mob", "mobid", "npc", "npcid"
+	};
+
 	private readonly AssetGridView _assetGrid;
 
 	private readonly BrandHeader _header;
@@ -80,6 +86,10 @@ public sealed class MainForm : Form
 	private readonly Panel _rewardGlowSwatch;
 
 	private readonly PictureBox _rewardGlowPreview;
+
+	private AnimationPlayback? _rewardPreviewPlayback;
+
+	private WzAnimationClip? _rewardPreviewClip;
 
 	private readonly TextBox _itemNameLabel;
 
@@ -796,6 +806,12 @@ public sealed class MainForm : Form
 		versionMenu.DropDownItems.Add(_v83VersionMenuItem);
 		versionMenu.DropDownItems.Add(_v95VersionMenuItem);
 		menuStrip.Items.Add(versionMenu);
+		ToolStripMenuItem viewMenu = new ToolStripMenuItem("View");
+		viewMenu.DropDownItems.Add("Preview Animations...", null, (object? _, EventArgs _) =>
+		{
+			PreviewSelectedAnimations();
+		});
+		menuStrip.Items.Add(viewMenu);
 		cashOnlyMenuItem = new ToolStripMenuItem("Cash Only")
 		{
 			CheckOnClick = true
@@ -1024,46 +1040,92 @@ public sealed class MainForm : Form
 
 	private void SaveWzArchive(bool askConfirmation)
 	{
-		if (_archiveSession == null || !_archiveSession.IsDirty)
+		bool itemDirty = _archiveSession != null && _archiveSession.IsDirty;
+		bool stringDirty = _stringLookup?.IsDirty == true;
+		if (!itemDirty && !stringDirty)
 		{
 			SetStatus("No staged WZ changes to save.");
 			return;
 		}
-		IReadOnlyList<WzFileLockInfo> lockers = WzFileLockInspector.GetLockingProcesses(_archiveSession.Path);
-		if (lockers.Count > 0)
+		string stringFileName = ((_stringLookup == null) ? null : Path.GetFileName(_stringLookup.Path));
+		List<string> lockedReports = new List<string>();
+		if (itemDirty)
 		{
-			ShowArchiveLockedMessage(lockers);
+			IReadOnlyList<WzFileLockInfo> itemLockers = WzFileLockInspector.GetLockingProcesses(_archiveSession!.Path);
+			if (itemLockers.Count > 0)
+			{
+				lockedReports.Add(FormatLockedFile(_archiveSession.FileName, itemLockers));
+			}
+		}
+		if (stringDirty && _stringLookup != null)
+		{
+			IReadOnlyList<WzFileLockInfo> stringLockers = WzFileLockInspector.GetLockingProcesses(_stringLookup.Path);
+			if (stringLockers.Count > 0)
+			{
+				lockedReports.Add(FormatLockedFile(stringFileName ?? "String.wz", stringLockers));
+			}
+		}
+		if (lockedReports.Count > 0)
+		{
+			ShowArchiveLockedMessage(string.Join(Environment.NewLine + Environment.NewLine, lockedReports));
 			return;
 		}
+		string files = (itemDirty && stringDirty) ? (_archiveSession!.FileName + " and " + stringFileName) : (itemDirty ? _archiveSession!.FileName : stringFileName);
 		if (askConfirmation)
 		{
-			DialogResult result = MessageBox.Show(this, $"Write changes to {_archiveSession.FileName}?\n\nThis repacks the entire archive. Large archives (such as Character.wz or Map.wz) can take several minutes and need free disk space for a .TEMP file plus a .bak backup.", "Save WZ archive", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation);
+			DialogResult result = MessageBox.Show(this, $"Write changes to {files}?\n\nThis repacks the archive(s). Large archives (such as Character.wz or Map.wz) can take several minutes and need free disk space for a .TEMP file plus a .bak backup.", "Save WZ archive", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation);
 			if (result != DialogResult.Yes)
 			{
 				return;
 			}
 		}
 		Cursor = Cursors.WaitCursor;
-		SplashForm splash = new SplashForm("Saving " + _archiveSession.FileName, "Repacking the archive. Large WZ files can take several minutes.");
+		SplashForm splash = new SplashForm("Saving " + files, "Repacking the archive(s). Large WZ files can take several minutes.");
 		splash.Show(this);
-		splash.Report("Repacking " + _archiveSession.FileName + "...", -1.0);
+		splash.Report("Preparing save...", -1.0);
 		try
 		{
-			SetStatus("Repacking " + _archiveSession.FileName + "...");
-			_archiveSession.Save();
-			foreach (ImgItemEntry item in _items)
+			if (itemDirty)
 			{
-				item.IsDirty = false;
+				splash.Report("Repacking " + _archiveSession!.FileName + "...", -1.0);
+				SetStatus("Repacking " + _archiveSession.FileName + "...");
+				_archiveSession.Save();
+				foreach (ImgItemEntry item in _items)
+				{
+					item.IsDirty = false;
+				}
+			}
+			if (stringDirty && _stringLookup != null)
+			{
+				splash.Report("Saving " + stringFileName + "...", -1.0);
+				SetStatus("Saving " + stringFileName + "...");
+				_stringLookup.Save();
 			}
 			splash.Report("Saved.", 1.0);
-			SetStatus("Saved " + _archiveSession.FileName);
+			SetStatus("Saved " + files);
 		}
 		catch (Exception ex)
 		{
-			lockers = WzFileLockInspector.GetLockingProcesses(_archiveSession.Path);
-			if (lockers.Count > 0)
+			lockedReports.Clear();
+			if (itemDirty && _archiveSession != null)
 			{
-				ShowArchiveLockedMessage(lockers);
+				IReadOnlyList<WzFileLockInfo> itemLockers = WzFileLockInspector.GetLockingProcesses(_archiveSession.Path);
+				if (itemLockers.Count > 0)
+				{
+					lockedReports.Add(FormatLockedFile(_archiveSession.FileName, itemLockers));
+				}
+			}
+			if (stringDirty && _stringLookup != null)
+			{
+				IReadOnlyList<WzFileLockInfo> stringLockers = WzFileLockInspector.GetLockingProcesses(_stringLookup.Path);
+				if (stringLockers.Count > 0)
+				{
+					lockedReports.Add(FormatLockedFile(stringFileName ?? "String.wz", stringLockers));
+				}
+			}
+			if (lockedReports.Count > 0)
+			{
+				ShowArchiveLockedMessage(string.Join(Environment.NewLine + Environment.NewLine, lockedReports));
 			}
 			else
 			{
@@ -1078,12 +1140,16 @@ public sealed class MainForm : Form
 		}
 	}
 
-	private void ShowArchiveLockedMessage(IReadOnlyList<WzFileLockInfo> lockers)
+	private static string FormatLockedFile(string fileName, IReadOnlyList<WzFileLockInfo> lockers)
 	{
 		string details = string.Join(Environment.NewLine, lockers.Select((WzFileLockInfo locker) => $"- {locker.ApplicationName} (PID {locker.ProcessId})"));
-		string fileName = _archiveSession?.FileName ?? "The archive";
-		SetStatus("Cannot save " + fileName + ": the file is in use");
-		MessageBox.Show(this, $"{fileName} is currently in use by:{Environment.NewLine}{Environment.NewLine}{details}{Environment.NewLine}{Environment.NewLine}Close these programs and try saving again. The archive cannot be replaced while another process has it open.", "WZ archive is in use", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+		return fileName + " is in use by:" + Environment.NewLine + details;
+	}
+
+	private void ShowArchiveLockedMessage(string details)
+	{
+		SetStatus("Cannot save: an archive is in use");
+		MessageBox.Show(this, details + Environment.NewLine + Environment.NewLine + "Close these programs and try saving again. The archive cannot be replaced while another process has it open.", "WZ archive is in use", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 	}
 
 	private void CloseArchiveSession()
@@ -1244,11 +1310,11 @@ public sealed class MainForm : Form
 	private static Bitmap? GetItemIconBitmap(WzSubProperty info)
 	{
 		WzCanvasProperty? canvas = ResolveCanvas(info, "iconRaw") ?? ResolveCanvas(info, "icon");
-		if (canvas?.PngProperty == null)
+		if (canvas == null)
 		{
 			return null;
 		}
-		return canvas.PngProperty.GetImage(saveInMemory: false);
+		return WzAnimationReader.GetCanvasBitmap(canvas);
 	}
 
 	private static Label CreateFilterCaption(string text)
@@ -1564,7 +1630,16 @@ public sealed class MainForm : Form
 			graphics.Clear(Color.Transparent);
 			return bitmap;
 		}
-		using Bitmap original = wzCanvasProperty.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? original = WzAnimationReader.GetCanvasBitmap(wzCanvasProperty);
+		if (original == null)
+		{
+			Bitmap empty = new Bitmap(48, 48);
+			using (Graphics graphics = Graphics.FromImage(empty))
+			{
+				graphics.Clear(Color.Transparent);
+			}
+			return empty;
+		}
 		return new Bitmap(original, new Size(48, 48));
 	}
 
@@ -1604,7 +1679,7 @@ public sealed class MainForm : Form
 			_itemEquipJobsLabel.Text = "Equip Jobs: -";
 			_itemPathLabel.Text = string.Empty;
 			SetPreview(null);
-			SetRewardPreview(null, hasReward: false);
+			SetRewardPreviewForInfo(null);
 			SetStatInputs(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, isCash: false, isTradeLocked: false);
 			UpdateRewardGlowPreview();
 			return;
@@ -1624,7 +1699,7 @@ public sealed class MainForm : Form
 		_itemPathLabel.Text = ((entries.Count == 1) ? imgItemEntry.FilePath : (string.Join(Environment.NewLine, from i in entries.Take(3)
 			select i.FilePath) + ((entries.Count > 3) ? (Environment.NewLine + "...") : string.Empty)));
 		SetPreview(imgItemEntry.Thumbnail);
-		SetRewardPreview(GetIconRewardPreviewBitmap(imgItemEntry.Info), GetIconRewardFrame(imgItemEntry.Info) != null);
+		SetRewardPreviewForInfo(imgItemEntry.Info);
 		SetStatInputs(GetInfoInt(imgItemEntry.Info, "incSTR"), GetInfoInt(imgItemEntry.Info, "incDEX"), GetInfoInt(imgItemEntry.Info, "incINT"), GetInfoInt(imgItemEntry.Info, "incLUK"), GetInfoInt(imgItemEntry.Info, "incPAD"), GetInfoInt(imgItemEntry.Info, "incMAD"), GetInfoInt(imgItemEntry.Info, "incSpeed"), GetInfoInt(imgItemEntry.Info, "incJump"), GetInfoInt(imgItemEntry.Info, "incMHP"), GetInfoInt(imgItemEntry.Info, "incMMP"), GetInfoInt(imgItemEntry.Info, "incACC"), GetInfoInt(imgItemEntry.Info, "incEVA"), GetInfoInt(imgItemEntry.Info, "tuc"), GetInfoInt(imgItemEntry.Info, "reqLevel"), GetInfoInt(imgItemEntry.Info, "cash") != 0, GetInfoInt(imgItemEntry.Info, "tradeBlock") != 0);
 		UpdateRewardGlowPreview();
 	}
@@ -1835,6 +1910,8 @@ public sealed class MainForm : Form
 			MessageBox.Show(this, "Select an item to change the ID first.", "Change ID", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 			return;
 		}
+		string oldId = entry.ItemId;
+		string oldDisplayName = entry.DisplayName;
 		using InputDialog dialog = new InputDialog("Change ID", "Item ID (use the same digit format as the current ID)", entry.ItemId);
 		if (dialog.ShowDialog(this) != DialogResult.OK)
 		{
@@ -1890,6 +1967,8 @@ public sealed class MainForm : Form
 				entry.Image.Name = newImageName;
 				entry.FilePath = Path.Combine(folder, newId + fileExtension);
 			}
+			UpdateItemReferences(entry, oldId, newId);
+			bool stringUpdated = UpdateStringOnRename(entry.Detection.Category, oldId, newId, oldDisplayName);
 			entry.ItemId = newId;
 			entry.Detection = new GameFileInfo(IsGameAsset: true, entry.Detection.SourceRoot, entry.Detection.Category, newId, entry.Detection.DisplayContext);
 			entry.DisplayName = GetDisplayName(entry.Info, entry.Detection);
@@ -1897,12 +1976,97 @@ public sealed class MainForm : Form
 			entry.IsDirty = true;
 			_archiveSession?.MarkDirty();
 			RefreshItemBrowser();
-			SetStatus("Changed item ID to " + newId);
+			SetStatus("Changed item ID to " + newId + (stringUpdated ? " and updated String.wz" : string.Empty));
 		}
 		catch (Exception ex)
 		{
 			MessageBox.Show(this, ex.Message, "Change ID failed", MessageBoxButtons.OK, MessageBoxIcon.Hand);
 		}
+	}
+
+	private bool UpdateStringOnRename(string category, string oldId, string newId, string fallbackName)
+	{
+		if (_stringLookup == null)
+		{
+			return false;
+		}
+		if (_stringLookup.MoveItemText(category, oldId, newId))
+		{
+			return true;
+		}
+		return _stringLookup.SetItemText(category, newId, fallbackName);
+	}
+
+	private bool UpdateStringOnCreate(string category, string sourceId, string newId, string fallbackName)
+	{
+		if (_stringLookup == null)
+		{
+			return false;
+		}
+		if (_stringLookup.CopyItemText(category, sourceId, newId, removeSource: false))
+		{
+			return true;
+		}
+		return _stringLookup.SetItemText(category, newId, fallbackName);
+	}
+
+	private static void UpdateItemReferences(ImgItemEntry entry, string oldId, string newId)
+	{
+		if (string.Equals(oldId, newId, StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+		IPropertyContainer? container = entry.ItemProperty ?? (IPropertyContainer?)entry.Image;
+		if (container != null)
+		{
+			UpdatePropertyReferences(container, oldId, newId);
+		}
+	}
+
+	private static void UpdatePropertyReferences(IPropertyContainer container, string oldId, string newId)
+	{
+		int? oldValue = (int.TryParse(oldId, out int parsedOld) ? parsedOld : ((int?)null));
+		int? newValue = (int.TryParse(newId, out int parsedNew) ? parsedNew : ((int?)null));
+		foreach (WzImageProperty property in container.WzProperties)
+		{
+			switch (property)
+			{
+			case WzStringProperty stringProperty:
+				stringProperty.Value = ReplaceIdReference(stringProperty.Value, oldId, newId);
+				break;
+			case WzUOLProperty uolProperty:
+				uolProperty.Value = ReplaceIdReference(uolProperty.Value, oldId, newId);
+				break;
+			case WzIntProperty intProperty when oldValue.HasValue && newValue.HasValue && IsIdReferenceName(intProperty.Name) && intProperty.Value == oldValue.Value:
+				intProperty.Value = newValue.Value;
+				break;
+			case WzShortProperty shortProperty when oldValue.HasValue && newValue.HasValue && IsIdReferenceName(shortProperty.Name) && shortProperty.Value == oldValue.Value:
+				shortProperty.Value = (short)newValue.Value;
+				break;
+			case WzLongProperty longProperty when oldValue.HasValue && newValue.HasValue && IsIdReferenceName(longProperty.Name) && longProperty.Value == oldValue.Value:
+				longProperty.Value = newValue.Value;
+				break;
+			}
+			if (property is IPropertyContainer child)
+			{
+				UpdatePropertyReferences(child, oldId, newId);
+			}
+		}
+	}
+
+	private static bool IsIdReferenceName(string name)
+	{
+		return IdReferenceNames.Contains(name);
+	}
+
+	private static string ReplaceIdReference(string value, string oldId, string newId)
+	{
+		if (string.IsNullOrEmpty(value) || !value.Contains(oldId, StringComparison.Ordinal))
+		{
+			return value;
+		}
+		string pattern = "(?<![0-9])" + Regex.Escape(oldId) + "(?![0-9])";
+		return Regex.Replace(value, pattern, newId);
 	}
 
 	private void ChangeSelectedItemJob()
@@ -1918,6 +2082,18 @@ public sealed class MainForm : Form
 	private void ChangeSelectedItemVSlot()
 	{
 		PromptSelectedInfoInt("Change vSlot", "vSlot value", "vSlot");
+	}
+
+	private void PreviewSelectedAnimations()
+	{
+		ImgItemEntry? entry = GetSelectedEntry();
+		if (entry == null)
+		{
+			MessageBox.Show(this, "Select an item first.", "Animation preview", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			return;
+		}
+		IPropertyContainer root = entry.ItemProperty ?? (IPropertyContainer)entry.Image;
+		AnimationViewerForm.ShowFor(this, root, "Animations - " + entry.ItemId);
 	}
 
 	private void PromptSelectedInfoInt(string title, string label, string nodeName)
@@ -2065,11 +2241,14 @@ public sealed class MainForm : Form
 				});
 				entry.IsDirty = false;
 			}
+			UpdateItemReferences(entry, template.ItemId, newId);
+			bool stringUpdated = UpdateStringOnCreate(detection.Category, template.ItemId, newId, template.DisplayName);
+			entry.DisplayName = GetDisplayName(info, detection);
 			_items.Add(entry);
 			RefreshCategoryFilterOptions();
 			RefreshItemBrowser();
 			_assetGrid.SelectRow(entry);
-			SetStatus((blank ? "Created new item " : "Duplicated item as ") + newId);
+			SetStatus((blank ? "Created new item " : "Duplicated item as ") + newId + (stringUpdated ? " and copied String.wz text" : string.Empty));
 		}
 		catch (Exception ex)
 		{
@@ -2105,11 +2284,14 @@ public sealed class MainForm : Form
 		entry.Image.Changed = true;
 		_archiveSession?.MarkDirty();
 		entry.IsDirty = true;
+		UpdateItemReferences(entry, template.ItemId, newId);
+		bool stringUpdated = UpdateStringOnCreate(template.Detection.Category, template.ItemId, newId, template.DisplayName);
+		entry.DisplayName = GetDisplayName(entry.Info, detection);
 		_items.Add(entry);
 		RefreshCategoryFilterOptions();
 		RefreshItemBrowser();
 		_assetGrid.SelectRow(entry);
-		SetStatus((blank ? "Created new item " : "Duplicated item as ") + newId);
+		SetStatus((blank ? "Created new item " : "Duplicated item as ") + newId + (stringUpdated ? " and copied String.wz text" : string.Empty));
 	}
 
 	private static WzSubProperty CreateBlankItemNode(string newId)
@@ -2301,6 +2483,10 @@ public sealed class MainForm : Form
 			{
 				SetStatus((selectedEntries.Count == 1) ? ("Staged " + selectedEntries[0].DisplayName + " for WZ save") : $"Staged {selectedEntries.Count} selected items for WZ save");
 				SaveWzArchive(askConfirmation: true);
+			}
+			else if (_stringLookup?.IsDirty == true)
+			{
+				SaveWzArchive(askConfirmation: false);
 			}
 			else
 			{
@@ -2542,6 +2728,10 @@ public sealed class MainForm : Form
 				SetStatus("Staged all modified items for WZ save");
 				SaveWzArchive(askConfirmation: true);
 			}
+			else if (_stringLookup?.IsDirty == true)
+			{
+				SaveWzArchive(askConfirmation: false);
+			}
 			else
 			{
 				SetStatus("Saved all modified items");
@@ -2638,7 +2828,7 @@ public sealed class MainForm : Form
 	{
 		WzCanvasProperty wzCanvasProperty = GetCanvas(entry.Info, canvasName) ?? throw new InvalidOperationException($"Item {entry.ItemId} does not contain '{canvasName}'.");
 		string filename = (outputPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? outputPath : (outputPath.TrimEnd('.') + ".png"));
-		using Bitmap bitmap = wzCanvasProperty.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? bitmap = WzAnimationReader.GetCanvasBitmap(wzCanvasProperty) ?? throw new InvalidOperationException($"Item {entry.ItemId} does not contain a readable '{canvasName}'.");
 		bitmap.Save(filename);
 	}
 
@@ -2730,11 +2920,15 @@ public sealed class MainForm : Form
 			return false;
 		}
 		WzCanvasProperty? source = ResolveCanvas(item.Info, "iconRaw") ?? ResolveCanvas(item.Info, "icon");
-		if (source?.PngProperty == null)
+		if (source == null)
 		{
 			return false;
 		}
-		using Bitmap inner = source.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? inner = WzAnimationReader.GetCanvasBitmap(source);
+		if (inner == null)
+		{
+			return false;
+		}
 		using Bitmap frame = IconRewardRenderer.Render(inner, _rewardGlowSlider.Value, out Point innerOffset);
 		ApplyIconRewardStructure(item, frame, source, innerOffset);
 		item.Image.Changed = true;
@@ -2881,11 +3075,15 @@ public sealed class MainForm : Form
 	private static Bitmap? GetIconRewardPreviewBitmap(WzSubProperty info)
 	{
 		WzCanvasProperty iconRewardFrame = GetIconRewardFrame(info);
-		if (iconRewardFrame?.PngProperty == null)
+		if (iconRewardFrame == null)
 		{
 			return null;
 		}
-		using Bitmap bitmap = iconRewardFrame.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? bitmap = WzAnimationReader.GetCanvasBitmap(iconRewardFrame);
+		if (bitmap == null)
+		{
+			return null;
+		}
 		return (Bitmap)bitmap.Clone();
 	}
 
@@ -2908,6 +3106,8 @@ public sealed class MainForm : Form
 		{
 			WzPngProperty wzPngProperty = (canvas.PngProperty = new WzPngProperty());
 		}
+		canvas.RemoveProperty(WzCanvasProperty.InlinkPropertyName);
+		canvas.RemoveProperty(WzCanvasProperty.OutlinkPropertyName);
 		WzPngFormat? targetFormat = forcedFormat ?? ((canvas.PngProperty.Width > 0 && canvas.PngProperty.Height > 0) ? new WzPngFormat?(canvas.PngProperty.Format) : ((WzPngFormat?)null));
 		using Bitmap bitmap2 = (Bitmap)bitmap.Clone();
 		canvas.PngProperty.SetBitmapPreservingFormat(bitmap2, targetFormat);
@@ -3015,9 +3215,11 @@ public sealed class MainForm : Form
 
 	private bool ConfirmDiscardChanges()
 	{
-		if (_archiveSession != null && _archiveSession.IsDirty)
+		bool sessionDirty = (_archiveSession != null && _archiveSession.IsDirty) || _stringLookup?.IsDirty == true;
+		if (sessionDirty)
 		{
-			DialogResult result = MessageBox.Show(this, "Save staged changes to " + _archiveSession.FileName + " before continuing? Choose No to discard the staged changes.", "Unsaved WZ changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Exclamation);
+			string fileName = ((_archiveSession != null) ? _archiveSession.FileName : Path.GetFileName(_stringLookup?.Path ?? "String.wz"));
+			DialogResult result = MessageBox.Show(this, "Save staged changes to " + fileName + " before continuing? Choose No to discard the staged changes.", "Unsaved WZ changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Exclamation);
 			if (result == DialogResult.Cancel)
 			{
 				return false;
@@ -3025,7 +3227,7 @@ public sealed class MainForm : Form
 			if (result == DialogResult.Yes)
 			{
 				SaveWzArchive(askConfirmation: false);
-				if (_archiveSession != null && _archiveSession.IsDirty)
+				if ((_archiveSession != null && _archiveSession.IsDirty) || _stringLookup?.IsDirty == true)
 				{
 					return false;
 				}
@@ -3195,6 +3397,46 @@ public sealed class MainForm : Form
 		}
 	}
 
+	private void SetRewardPreviewForInfo(WzSubProperty? info)
+	{
+		StopRewardPreviewAnimation();
+		if (info == null)
+		{
+			SetRewardPreview(null, hasReward: false);
+			return;
+		}
+		WzAnimationInfo? animation = WzAnimationReader.Enumerate(info).FirstOrDefault((WzAnimationInfo item) => string.Equals(item.Name, "iconReward", StringComparison.OrdinalIgnoreCase) || item.Name.EndsWith("/iconReward", StringComparison.OrdinalIgnoreCase));
+		if (animation != null)
+		{
+			try
+			{
+				_rewardPreviewClip = WzAnimationReader.Load(animation);
+				_rewardPreviewPlayback = new AnimationPlayback(_iconRewardPreview, _rewardPreviewClip.Frames, _rewardPreviewClip.Delays);
+				_iconRewardPreviewStatusLabel.Visible = false;
+				if (_rewardPreviewSizeLabel != null)
+				{
+					_rewardPreviewSizeLabel.Text = $"{_rewardPreviewClip.Width} x {_rewardPreviewClip.Height} px";
+				}
+				_rewardPreviewPlayback.Play();
+				return;
+			}
+			catch
+			{
+				StopRewardPreviewAnimation();
+			}
+		}
+		SetRewardPreview(GetIconRewardPreviewBitmap(info), GetIconRewardFrame(info) != null);
+	}
+
+	private void StopRewardPreviewAnimation()
+	{
+		_rewardPreviewPlayback?.Dispose();
+		_rewardPreviewPlayback = null;
+		_rewardPreviewClip?.Dispose();
+		_rewardPreviewClip = null;
+		_iconRewardPreview.Image = null;
+	}
+
 	private void SetRewardPreview(Bitmap? bitmap, bool hasReward)
 	{
 		Image image = _iconRewardPreview.Image;
@@ -3250,6 +3492,7 @@ public sealed class MainForm : Form
 		}
 		ClearLoadedItems();
 		SetPreview(null);
+		StopRewardPreviewAnimation();
 		SetRewardPreview(null, hasReward: false);
 		base.OnFormClosing(e);
 	}

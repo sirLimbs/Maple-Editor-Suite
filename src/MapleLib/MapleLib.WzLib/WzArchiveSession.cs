@@ -425,6 +425,164 @@ public sealed class WzStringLookup : IDisposable
 		return id;
 	}
 
+	public bool IsDirty => _session.IsDirty;
+
+	public string Path => _session.Path;
+
+	public void Save(bool createBackup = true)
+	{
+		_session.Save(createBackup);
+	}
+
+	public bool MoveItemText(string category, string sourceId, string targetId)
+	{
+		return CopyItemText(category, sourceId, targetId, removeSource: true);
+	}
+
+	public bool CopyItemText(string category, string sourceId, string targetId, bool removeSource)
+	{
+		if (!TryResolveCategory(category, out IPropertyContainer? container))
+		{
+			return false;
+		}
+		WzImageProperty? source = FindItemEntry(container, sourceId);
+		if (source == null)
+		{
+			return false;
+		}
+		string targetKey = FormatTargetKey(source.Name, targetId);
+		WzImageProperty? target = FindItemEntry(container, targetKey);
+		WzImageProperty clone = source.DeepClone();
+		clone.Name = targetKey;
+		if (target != null && !ReferenceEquals(target, source))
+		{
+			container.RemoveProperty(target);
+		}
+		container.AddProperty(clone);
+		if (removeSource && !string.Equals(source.Name, targetKey, StringComparison.OrdinalIgnoreCase))
+		{
+			container.RemoveProperty(source);
+		}
+		_session.MarkDirty();
+		return true;
+	}
+
+	public bool SetItemText(string category, string id, string name, string? desc = null)
+	{
+		if (!TryResolveCategory(category, out IPropertyContainer? container))
+		{
+			return false;
+		}
+		WzImageProperty? existing = FindItemEntry(container, id);
+		WzSubProperty entry;
+		if (existing is WzSubProperty subProperty)
+		{
+			entry = subProperty;
+		}
+		else
+		{
+			entry = new WzSubProperty(id);
+			container.AddProperty(entry);
+		}
+		SetOrCreateString(entry, "name", name);
+		if (desc != null)
+		{
+			SetOrCreateString(entry, "desc", desc);
+		}
+		_session.MarkDirty();
+		return true;
+	}
+
+	private bool TryResolveCategory(string category, out IPropertyContainer? container)
+	{
+		container = null;
+		if (string.IsNullOrWhiteSpace(category))
+		{
+			return false;
+		}
+		switch (category.ToLowerInvariant())
+		{
+		case "consume":
+			container = GetImage("Consume.img");
+			break;
+		case "etc":
+			container = GetImage("Etc.img");
+			break;
+		case "install":
+			container = GetImage("Ins.img") ?? GetImage("Install.img");
+			break;
+		case "cash":
+			container = GetImage("Cash.img");
+			break;
+		case "pet":
+			container = GetImage("Pet.img");
+			break;
+		case "taming":
+		case "tamingmob":
+		{
+			WzImage? eqp = GetImage("Eqp.img");
+			IPropertyContainer? eqpContainer = eqp?["Eqp"] as IPropertyContainer;
+			container = eqpContainer?["Taming"] as IPropertyContainer;
+			break;
+		}
+		default:
+		{
+			WzImage? eqp = GetImage("Eqp.img");
+			IPropertyContainer? eqpContainer = eqp?["Eqp"] as IPropertyContainer;
+			container = eqpContainer?[category] as IPropertyContainer;
+			break;
+		}
+		}
+		return container != null;
+	}
+
+	private static WzImageProperty? FindItemEntry(IPropertyContainer container, string id)
+	{
+		WzImageProperty? direct = container[id];
+		if (direct != null)
+		{
+			return direct;
+		}
+		string normalized = NormalizeId(id);
+		foreach (WzImageProperty property in container.WzProperties)
+		{
+			if (string.Equals(property.Name, id, StringComparison.OrdinalIgnoreCase))
+			{
+				return property;
+			}
+			if (string.Equals(NormalizeId(property.Name), normalized, StringComparison.OrdinalIgnoreCase))
+			{
+				return property;
+			}
+		}
+		return null;
+	}
+
+	private static string FormatTargetKey(string sourceKey, string targetId)
+	{
+		if (int.TryParse(sourceKey, out int _) && int.TryParse(targetId, out int targetValue))
+		{
+			int width = sourceKey.Length;
+			string formatted = targetValue.ToString("D" + width);
+			if (formatted.Length <= width)
+			{
+				return formatted;
+			}
+		}
+		return targetId;
+	}
+
+	private static void SetOrCreateString(WzSubProperty entry, string name, string value)
+	{
+		if (entry[name] is WzStringProperty stringProperty)
+		{
+			stringProperty.Value = value;
+			return;
+		}
+		entry.RemoveProperty(name);
+		entry.AddProperty(new WzStringProperty(name, value));
+	}
+
 	public void Dispose()
 	{
 		_session.Dispose();

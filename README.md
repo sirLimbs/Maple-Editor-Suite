@@ -109,7 +109,9 @@ Both workflows are usable from the same build. The data-version selector changes
   - `Int`, `Short`, `Long`, `String`, `Vector`
   - Canvas, sub-property and UOL nodes are shown read-only for safety
 - ID changer supports both image-per-item entries and grouped item nodes, with duplicate checks.
-- Create blank items or duplicate existing items with a new ID, including grouped `Item.wz` entries.
+- Changing an ID moves the matching `String.wz` entry and rewrites linked item IDs, `source` paths, UOLs, `_inlink` and `_outlink` values.
+- Create blank items or duplicate existing items with a new ID, including grouped `Item.wz` entries; new items copy matching `String.wz` text and rewrite references to the new ID.
+- Reads linked canvases through `_inlink` / `_outlink`, and removes links when replacing an icon with a concrete image.
 - Localized String.wz lookup for the selected item category and ID.
 
 </details>
@@ -128,6 +130,8 @@ Both workflows are usable from the same build. The data-version selector changes
   - Automatic canvas origin handling
 - Batch add `iconReward` for every selected item through the splash/progress UI.
 - Each batch item is generated from its own `iconRaw`/`icon` and validated against its own item info node.
+- Reward Preview plays multi-frame `iconReward` animations automatically.
+- `View > Preview Animations...` lists every numeric animation node (0, 1, 2, ...) and plays it.
 
 </details>
 
@@ -154,6 +158,8 @@ Both workflows are usable from the same build. The data-version selector changes
 - Automatic sibling `String.wz` name lookup.
 - Numeric mob-ID sorting and full-text search.
 - Multi-select, selection preservation, `Ctrl+C` ID copying and dirty status.
+- Mob Preview plays the primary `stand` animation (or the first available animation) automatically.
+- `View > Preview Animations...` lists all animations, including nested effect animations, with playback and APNG/GIF export.
 - Mob preview with source image and dimensions.
 - Focused stat editor with mass-apply support:
   - Level
@@ -206,6 +212,7 @@ Both workflows are usable from the same build. The data-version selector changes
 - Change `icon` / `iconRaw`, export `iconRaw`.
 - Save Selected, Save All, Save As `.img`, Save As `.img.xml`, Save Both, Delete Selected.
 - Save `Item.wz` and `String.wz` archives with `.bak` backups.
+- `View > Preview Animations...` supports any multi-frame nodes found on the selected card.
 
 ---
 
@@ -220,6 +227,7 @@ Both workflows are usable from the same build. The data-version selector changes
 - Per-user settings stored outside the repository at `%APPDATA%\MapleEditor\settings.json`.
 - No hard-coded developer paths; data folders are remembered per user.
 - Safe WZ save flow with backups and lock diagnostics.
+- Animated canvas playback with APNG and GIF export, preserving frame delays and full alpha for APNG.
 - Dirty status in browser grids and a dirty-only filter in the Item Editor.
 
 ---
@@ -232,7 +240,7 @@ Both workflows are usable from the same build. The data-version selector changes
 | `.img` | Yes | Yes | IV auto-detected across GMS / EMS / BMS |
 | `.img.xml` | Yes | Yes | Classic XML serialization |
 | Grouped images | Yes | Yes | Item and mob nodes inside one image |
-| `String.wz` names | Yes | Codex only | Name lookup is automatic; Codex edits Consume text |
+| `String.wz` names | Yes | Item + Codex | Item name/ID updates and Codex Consume text are written back |
 
 ---
 

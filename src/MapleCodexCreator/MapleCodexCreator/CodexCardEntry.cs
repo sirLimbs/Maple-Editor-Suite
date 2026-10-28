@@ -61,7 +61,14 @@ internal sealed class CodexCardEntry : IDisposable
 			graphics.Clear(Color.Transparent);
 			return bitmap;
 		}
-		using Bitmap original = wzCanvasProperty.PngProperty.GetImage(saveInMemory: false);
+		using Bitmap? original = WzAnimationReader.GetCanvasBitmap(wzCanvasProperty);
+		if (original == null)
+		{
+			Bitmap empty = new Bitmap(48, 48);
+			using Graphics graphics = Graphics.FromImage(empty);
+			graphics.Clear(Color.Transparent);
+			return empty;
+		}
 		return new Bitmap(original, new Size(48, 48));
 	}
 

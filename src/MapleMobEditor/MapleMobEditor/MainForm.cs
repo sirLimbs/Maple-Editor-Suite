@@ -49,6 +49,10 @@ internal sealed class MainForm : Form
 
 	private readonly PictureBox _iconPreview;
 
+	private AnimationPlayback? _mobPreviewPlayback;
+
+	private WzAnimationClip? _mobPreviewClip;
+
 	private readonly Label _itemNameLabel;
 
 	private readonly Label _itemContextLabel;
@@ -565,6 +569,12 @@ internal sealed class MainForm : Form
 		versionMenu.DropDownItems.Add(_v83VersionMenuItem);
 		versionMenu.DropDownItems.Add(_v95VersionMenuItem);
 		menuStrip.Items.Add(versionMenu);
+		ToolStripMenuItem viewMenu = new ToolStripMenuItem("View");
+		viewMenu.DropDownItems.Add("Preview Animations...", null, (object? _, EventArgs _) =>
+		{
+			PreviewSelectedAnimations();
+		});
+		menuStrip.Items.Add(viewMenu);
 		cashOnlyMenuItem = new ToolStripMenuItem("Boss Only")
 		{
 			CheckOnClick = true
@@ -1112,9 +1122,12 @@ internal sealed class MainForm : Form
 		{
 			try
 			{
-				using Bitmap source = item.PngProperty.GetImage(saveInMemory: false);
-				using Bitmap original = CropTransparentBounds(source);
-				return new Bitmap(original, new Size(48, 48));
+				using Bitmap? source = WzAnimationReader.GetCanvasBitmap(item);
+				if (source != null)
+				{
+					using Bitmap original = CropTransparentBounds(source);
+					return new Bitmap(original, new Size(48, 48));
+				}
 			}
 			catch
 			{
@@ -1246,6 +1259,7 @@ internal sealed class MainForm : Form
 			_itemNameLabel.Text = "No mob selected";
 			_itemContextLabel.Text = ((_currentFolderPath == null) ? "Detected context" : _currentFolderPath);
 			_itemPathLabel.Text = string.Empty;
+			StopMobPreviewAnimation();
 			SetPreview(null);
 			SetStatInputs(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, applyDamageReflect: false, hasPhysicalAndMagicCounter: false, isCash: false, isTradeLocked: false);
 			return;
@@ -1254,7 +1268,7 @@ internal sealed class MainForm : Form
 		_itemContextLabel.Text = ((entries.Count == 1) ? $"{imgItemEntry.Detection.DisplayContext} | Mob ID {imgItemEntry.ItemId} | {imgItemEntry.IvLabel}" : "Mass edit mode | changes apply to every selected mob");
 		_itemPathLabel.Text = ((entries.Count == 1) ? imgItemEntry.FilePath : (string.Join(Environment.NewLine, from i in entries.Take(3)
 			select i.FilePath) + ((entries.Count > 3) ? (Environment.NewLine + "...") : string.Empty)));
-		SetPreview(imgItemEntry.Thumbnail);
+		SetPreviewForEntry(imgItemEntry);
 		int infoInt = GetInfoInt(imgItemEntry.Info, "PADamage");
 		int infoInt2 = GetInfoInt(imgItemEntry.Info, "MADamage");
 		int damageReflect = ((infoInt == infoInt2) ? infoInt : 0);
@@ -1787,6 +1801,54 @@ internal sealed class MainForm : Form
 		return string.Join(", ", list);
 	}
 
+	private void SetPreviewForEntry(ImgItemEntry entry)
+	{
+		StopMobPreviewAnimation();
+		IPropertyContainer root = entry.ItemProperty ?? (IPropertyContainer)entry.Image;
+		IReadOnlyList<WzAnimationInfo> animations = WzAnimationReader.Enumerate(root);
+		WzAnimationInfo? animation = animations.FirstOrDefault((WzAnimationInfo item) => string.Equals(item.Name, "stand", StringComparison.OrdinalIgnoreCase) || item.Name.EndsWith("/stand", StringComparison.OrdinalIgnoreCase)) ?? animations.FirstOrDefault();
+		if (animation != null)
+		{
+			try
+			{
+				_mobPreviewClip = WzAnimationReader.Load(animation);
+				_mobPreviewPlayback = new AnimationPlayback(_iconPreview, _mobPreviewClip.Frames, _mobPreviewClip.Delays);
+				if (_previewSizeLabel != null)
+				{
+					_previewSizeLabel.Text = $"{_mobPreviewClip.Width} x {_mobPreviewClip.Height} px";
+				}
+				_mobPreviewPlayback.Play();
+				return;
+			}
+			catch
+			{
+				StopMobPreviewAnimation();
+			}
+		}
+		SetPreview(entry.Thumbnail);
+	}
+
+	private void PreviewSelectedAnimations()
+	{
+		ImgItemEntry? entry = GetSelectedEntry();
+		if (entry == null)
+		{
+			MessageBox.Show(this, "Select a mob first.", "Animation preview", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			return;
+		}
+		IPropertyContainer root = entry.ItemProperty ?? (IPropertyContainer)entry.Image;
+		AnimationViewerForm.ShowFor(this, root, "Animations - " + entry.ItemId);
+	}
+
+	private void StopMobPreviewAnimation()
+	{
+		_mobPreviewPlayback?.Dispose();
+		_mobPreviewPlayback = null;
+		_mobPreviewClip?.Dispose();
+		_mobPreviewClip = null;
+		_iconPreview.Image = null;
+	}
+
 	private void SetPreview(Bitmap? bitmap)
 	{
 		Image image = _iconPreview.Image;
@@ -1840,6 +1902,7 @@ internal sealed class MainForm : Form
 			return;
 		}
 		ClearLoadedItems();
+		StopMobPreviewAnimation();
 		SetPreview(null);
 		base.OnFormClosing(e);
 	}
